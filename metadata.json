@@ -1,0 +1,5 @@
+{
+  "name": "NFC Bank Imobiliário",
+  "description": "Um banco digital NFC para o jogo Banco Imobiliário. Substitua o dinheiro de papel por cartões NFC e gerencie saldos, transferências e histórico diretamente no seu celular.",
+  "requestFramePermissions": []
+}
