@@ -14,8 +14,12 @@ export const nfcService = {
         for (const record of message.records) {
           if (record.recordType === "mime" && record.mediaType === "application/json") {
             const textDecoder = new TextDecoder();
-            const data = JSON.parse(textDecoder.decode(record.data));
-            onReading(data, serialNumber);
+            try {
+              const data = JSON.parse(textDecoder.decode(record.data));
+              onReading(data, serialNumber);
+            } catch (e) {
+              console.error("Erro ao processar JSON da tag", e);
+            }
           }
         }
       };
@@ -28,7 +32,7 @@ export const nfcService = {
     }
   },
 
-  write: async (payload: NfcPayload) => {
+  write: async (payload: any) => {
     try {
       const ndef = new (window as any).NDEFReader();
       const encoder = new TextEncoder();
@@ -42,6 +46,24 @@ export const nfcService = {
       return true;
     } catch (error) {
       console.error("NFC Write Error:", error);
+      throw error;
+    }
+  },
+
+  clear: async () => {
+    try {
+      const ndef = new (window as any).NDEFReader();
+      // Escreve um registro vazio para "limpar" a tag do app
+      await ndef.write({
+        records: [{
+          recordType: "mime",
+          mediaType: "application/json",
+          data: new TextEncoder().encode(JSON.stringify({}))
+        }]
+      });
+      return true;
+    } catch (error) {
+      console.error("NFC Clear Error:", error);
       throw error;
     }
   }
