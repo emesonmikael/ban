@@ -8,7 +8,7 @@ export const STORAGE_KEYS = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  initialBalance: 1500,
+  initialBalance: 3000,
   bankPassword: '1234'
 };
 
