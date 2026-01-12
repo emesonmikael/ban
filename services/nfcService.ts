@@ -1,13 +1,30 @@
 
 import { NfcPayload } from '../types';
 
+let abortController: AbortController | null = null;
+
 export const nfcService = {
   isSupported: () => 'NDEFReader' in window,
 
+  stopScan: () => {
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
+      console.log("NFC Scan parado.");
+    }
+  },
+
   scan: async (onReading: (payload: NfcPayload, serialNumber: string) => void, onError: (err: any) => void) => {
     try {
+      // Cancela qualquer scan anterior antes de começar um novo
+      if (abortController) {
+        abortController.abort();
+      }
+      
+      abortController = new AbortController();
       const ndef = new (window as any).NDEFReader();
-      await ndef.scan();
+      
+      await ndef.scan({ signal: abortController.signal });
       
       ndef.onreading = (event: any) => {
         const { message, serialNumber } = event;
@@ -27,13 +44,19 @@ export const nfcService = {
       ndef.onreadingerror = () => {
         onError("Erro ao ler o cartão NFC. Tente novamente.");
       };
-    } catch (error) {
-      onError(error);
+
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        onError(error);
+      }
     }
   },
 
   write: async (payload: any) => {
     try {
+      // Para o scan antes de tentar escrever para evitar conflitos
+      nfcService.stopScan();
+      
       const ndef = new (window as any).NDEFReader();
       const encoder = new TextEncoder();
       await ndef.write({
@@ -52,8 +75,8 @@ export const nfcService = {
 
   clear: async () => {
     try {
+      nfcService.stopScan();
       const ndef = new (window as any).NDEFReader();
-      // Escreve um registro vazio para "limpar" a tag do app
       await ndef.write({
         records: [{
           recordType: "mime",

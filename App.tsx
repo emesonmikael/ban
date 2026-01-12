@@ -60,6 +60,11 @@ const App: React.FC = () => {
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
+  const navigateTo = (newView: typeof view) => {
+    nfcService.stopScan(); // Garante que o NFC pare ao mudar de tela
+    setView(newView);
+  };
+
   const handleStartScan = async () => {
     if (!nfcService.isSupported()) {
       notify("Seu navegador não suporta NFC. Use o Chrome no Android.", "error");
@@ -75,12 +80,13 @@ const App: React.FC = () => {
           if (player) {
             playSound('success');
             setActivePlayer(player);
-            setView('player');
+            navigateTo('player');
             setIsNfcScanning(false);
           } else {
             playSound('error');
             notify("Cartão não vinculado a nenhum jogador.", "error");
             setIsNfcScanning(false);
+            nfcService.stopScan();
           }
         },
         (err) => {
@@ -98,7 +104,6 @@ const App: React.FC = () => {
     setPlayers(prev => {
       const next = updater(prev);
       storageService.savePlayers(next);
-      // Atualiza o player ativo se ele estiver na lista modificada
       if (activePlayer) {
         const updatedActive = next.find(p => p.id === activePlayer.id);
         if (updatedActive) setActivePlayer(updatedActive);
@@ -165,8 +170,6 @@ const App: React.FC = () => {
         const recipientId = payload.playerId;
         
         if (activePlayer && recipientId && recipientId !== activePlayer.id) {
-          // Explicitly type transactions to avoid type widening issues
-          // This fixes the error on line 169 by ensuring history array matches Player interface
           updatePlayersState(prev => {
             const recipient = prev.find(p => p.id === recipientId);
             if (!recipient) {
@@ -184,11 +187,7 @@ const App: React.FC = () => {
                   description: 'Transferência enviada',
                   targetPlayerName: recipient.name
                 };
-                return {
-                  ...p,
-                  balance: p.balance - amount,
-                  history: [transOut, ...p.history].slice(0, 50)
-                };
+                return { ...p, balance: p.balance - amount, history: [transOut, ...p.history].slice(0, 50) };
               }
               if (p.id === recipientId) {
                 const transIn: Transaction = {
@@ -199,11 +198,7 @@ const App: React.FC = () => {
                   description: 'Transferência recebida',
                   targetPlayerName: activePlayer.name
                 };
-                return {
-                  ...p,
-                  balance: p.balance + amount,
-                  history: [transIn, ...p.history].slice(0, 50)
-                };
+                return { ...p, balance: p.balance + amount, history: [transIn, ...p.history].slice(0, 50) };
               }
               return p;
             });
@@ -212,9 +207,10 @@ const App: React.FC = () => {
           playSound('cash');
           notify(`Enviado ${formatCurrency(amount)} para ${payload.name}!`, "success");
           setTransAmount('');
-          setView('player');
+          nfcService.stopScan();
         } else {
           notify("Cartão inválido para transferência.", "error");
+          nfcService.stopScan();
         }
       },
       (err) => {
@@ -253,7 +249,7 @@ const App: React.FC = () => {
       notify(`${newName} registrado!`, "success");
       setNewName('');
       setIsNfcScanning(false);
-      setView('bank');
+      navigateTo('bank');
     } catch (e) {
       setIsNfcScanning(false);
       notify("Erro ao gravar NFC.", "error");
@@ -271,7 +267,13 @@ const App: React.FC = () => {
       notify("Erro ao formatar cartão.", "error");
     } finally {
       setIsNfcScanning(false);
+      nfcService.stopScan();
     }
+  };
+
+  const handleCancelScan = () => {
+    setIsNfcScanning(false);
+    nfcService.stopScan();
   };
 
   const handleExport = () => {
@@ -297,7 +299,6 @@ const App: React.FC = () => {
 
   const resetGame = () => {
     if (confirm("Resetar saldos de todos os jogadores?")) {
-      // Fix for Error in file App.tsx on line 297 by ensuring history array matches Player interface
       updatePlayersState(prev => prev.map(p => {
         const trans: Transaction = {
           id: crypto.randomUUID(),
@@ -320,7 +321,7 @@ const App: React.FC = () => {
     if (confirm("Apagar todos os jogadores do banco?")) {
       storageService.clearAll();
       setPlayers([]);
-      setView('home');
+      navigateTo('home');
       notify("Banco de dados limpo.", "info");
     }
   };
@@ -340,7 +341,7 @@ const App: React.FC = () => {
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
           Entrar com Cartão
         </Button>
-        <Button fullWidth variant="outline" onClick={() => setView('bank')}>
+        <Button fullWidth variant="outline" onClick={() => navigateTo('bank')}>
           🏦 Acesso ao Banco
         </Button>
       </div>
@@ -353,7 +354,7 @@ const App: React.FC = () => {
       <div className="p-6 pb-24 space-y-8 animate-in slide-in-from-right duration-300">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-black text-gray-800">{activePlayer.name}</h1>
-          <Button variant="outline" onClick={() => setView('home')} className="px-4 py-2">Sair</Button>
+          <Button variant="outline" onClick={() => navigateTo('home')} className="px-4 py-2">Sair</Button>
         </div>
 
         <div className="bg-gradient-to-br from-green-600 to-emerald-700 p-8 rounded-3xl text-white shadow-2xl relative overflow-hidden">
@@ -424,7 +425,7 @@ const App: React.FC = () => {
             if (passwordInput === settings.bankPassword) setBankAuth(true);
             else notify("Senha incorreta!", "error");
           }}>Acessar</Button>
-          <Button variant="outline" onClick={() => setView('home')}>Voltar</Button>
+          <Button variant="outline" onClick={() => navigateTo('home')}>Voltar</Button>
         </div>
       );
     }
@@ -433,11 +434,11 @@ const App: React.FC = () => {
       <div className="p-6 space-y-8 animate-in fade-in duration-300">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-black">🏦 Banco</h1>
-          <Button variant="outline" onClick={() => { setBankAuth(false); setView('home'); }}>Sair</Button>
+          <Button variant="outline" onClick={() => { setBankAuth(false); navigateTo('home'); }}>Sair</Button>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Button variant="secondary" onClick={() => setView('register')}>Novo Jogador</Button>
+          <Button variant="secondary" onClick={() => navigateTo('register')}>Novo Jogador</Button>
           <Button variant="outline" onClick={handleClearTag}>Limpar Cartão</Button>
         </div>
 
@@ -450,7 +451,7 @@ const App: React.FC = () => {
                   <p className="font-bold text-lg">{p.name}</p>
                   <p className="text-green-600 font-bold">{formatCurrency(p.balance)}</p>
                 </div>
-                <Button variant="outline" onClick={() => { setActivePlayer(p); setView('player'); }} className="px-4 py-2 text-sm">Painel</Button>
+                <Button variant="outline" onClick={() => { setActivePlayer(p); navigateTo('player'); }} className="px-4 py-2 text-sm">Painel</Button>
               </div>
             ))}
           </div>
@@ -491,7 +492,7 @@ const App: React.FC = () => {
            <p className="text-green-700 text-sm">Saldo inicial configurado: <strong>{formatCurrency(settings.initialBalance)}</strong></p>
         </div>
         <Button fullWidth onClick={handleRegisterNew} loading={isNfcScanning} className="h-20 text-lg">Gravar Cartão NFC</Button>
-        <Button variant="outline" fullWidth onClick={() => setView('bank')}>Voltar</Button>
+        <Button variant="outline" fullWidth onClick={() => navigateTo('bank')}>Voltar</Button>
       </div>
     </div>
   );
@@ -516,7 +517,7 @@ const App: React.FC = () => {
           </div>
           <h2 className="text-3xl font-black mb-4 tracking-tight">Aproxime o Cartão</h2>
           <p className="text-white/60 text-lg leading-relaxed">Mantenha o cartão encostado na parte de trás do celular.</p>
-          <Button variant="outline" className="mt-12 !text-white !border-white/30" onClick={() => setIsNfcScanning(false)}>Cancelar</Button>
+          <Button variant="outline" className="mt-12 !text-white !border-white/30" onClick={handleCancelScan}>Cancelar</Button>
         </div>
       )}
 
@@ -529,7 +530,7 @@ const App: React.FC = () => {
 
       {view === 'home' && (
         <footer className="absolute bottom-8 w-full text-center px-6 opacity-40">
-          <p className="text-xs font-bold uppercase tracking-widest text-gray-400">NFC Bank System 2.0</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-gray-400">NFC Bank System 2.1</p>
         </footer>
       )}
     </div>
